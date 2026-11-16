@@ -18,7 +18,7 @@ namespace Babel.EditorTools
 
         class RaceSpec
         {
-            public string key, displayName;
+            public string key, displayName, description;
             public Color color;
             public Look look;
             public float hp, speed, tether, range, melee, ranged;
@@ -32,12 +32,15 @@ namespace Babel.EditorTools
         static readonly RaceSpec[] Races =
         {
             new RaceSpec { key = "Metaphos", displayName = "메타포스", color = new Color(0.50f, 0.45f, 0.36f), look = Look.Block,
+                description = "석판 중장갑. 뭉쳐서 밀고 가는 벽: 체력이 높고 근접이 강하지만 느리고 분대가 멀리 못 간다.",
                 hp = 1.6f, speed = 0.8f, tether = 0.7f, range = 0.6f, melee = 1.5f, ranged = 0.8f,
                 team = 0, player = true, pos = new Vector2(0, -1900), heading = 90f },
             new RaceSpec { key = "Tanarc", displayName = "타나르크", color = new Color(0.20f, 0.50f, 0.95f), look = Look.Tall,
+                description = "흰 장갑과 푸른 회로. 넓게 펼쳐 쏜다: 사거리와 사격이 강하지만 체력이 낮고 근접을 피한다.",
                 hp = 0.8f, speed = 1.1f, tether = 1.25f, range = 1.2f, melee = 0.7f, ranged = 1.4f, avoidMelee = true,
                 team = 1, pos = new Vector2(-1500, 900), heading = 0f },
             new RaceSpec { key = "Demon", displayName = "악마", color = new Color(0.75f, 0.12f, 0.10f), look = Look.Horned,
+                description = "혼돈·파괴·종말의 악마. 물면 안 놓는 돌격: 근접과 속도가 높고 물러나지 않는다.",
                 hp = 1.0f, speed = 1.25f, tether = 1.0f, range = 0.7f, melee = 1.6f, ranged = 0.6f, noRetreat = true,
                 team = 2, pos = new Vector2(1500, 900), heading = 180f },
         };
@@ -90,6 +93,7 @@ namespace Babel.EditorTools
                 race.leaderPrefab = UnitPrefab($"{sp.key}_Leader", cfg.squadLeaderRadius, mat, dark, null, sp.look, 9f, cfg.leaderHp, false);
                 race.memberPrefab = UnitPrefab($"{sp.key}_Member", cfg.squadLeaderRadius * ms, mat, dark, null, sp.look, 6f, cfg.memberHp, false);
                 race.color = sp.color; // 색은 머티리얼과 항상 맞춘다
+                if (string.IsNullOrEmpty(race.description)) race.description = sp.description;
                 if (fresh)
                 {
                     race.raceName = sp.displayName;
@@ -130,11 +134,14 @@ namespace Babel.EditorTools
             var player = worldGo.AddComponent<PlayerController>();
             var overlay = worldGo.AddComponent<BattleOverlay>();
             var hud = worldGo.AddComponent<BattleHud>();
+            var select = worldGo.AddComponent<RaceSelectScreen>();
             world.config = cfg;
             world.boltPrefab = bolt;
             world.skillPrefab = skill;
             world.autoPrefab = auto;
             world.player = player;
+            world.races = raceAssets;
+            select.world = world;
             world.battleCamera = bc;
             overlay.world = world;
             overlay.lineMaterial = lineMat;

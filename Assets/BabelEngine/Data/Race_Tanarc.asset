@@ -14,6 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Babel.RaceDefinition
   raceName: "\uD0C0\uB098\uB974\uD06C"
   color: {r: 0.2, g: 0.5, b: 0.95, a: 1}
+  description: "\uD770 \uC7A5\uAC11\uACFC \uD478\uB978 \uD68C\uB85C. \uB113\uAC8C
+    \uD3BC\uCCD0 \uC3DC\uB2E4: \uC0AC\uAC70\uB9AC\uC640 \uC0AC\uACA9\uC774 \uAC15\uD558\uC9C0\uB9CC
+    \uCCB4\uB825\uC774 \uB0AE\uACE0 \uADFC\uC811\uC744 \uD53C\uD55C\uB2E4."
   commanderPrefab: {fileID: 182740942547279787, guid: cb382929bf640c44faf37a47939afcca, type: 3}
   leaderPrefab: {fileID: 4240797526482516885, guid: 21bbba3be73a60b43adf3e322fa4562e, type: 3}
   memberPrefab: {fileID: 800850254631894128, guid: 7c5bbe91f7afe924cbadc822da617bfe, type: 3}

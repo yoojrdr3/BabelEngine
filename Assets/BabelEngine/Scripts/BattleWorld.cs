@@ -9,11 +9,13 @@ namespace Babel
         public BattleConfig config;
         public GameObject boltPrefab, skillPrefab, autoPrefab;
         public PlayerController player;
+        [Tooltip("종족 선택 화면에 나오는 종족들")] public RaceDefinition[] races;
         public BattleCamera battleCamera;
 
         [Header("실행 중")]
         public float time;
         public Army playerArmy;
+        [Tooltip("종족을 골라 전투가 시작되었는가")] public bool started;
         public readonly List<Army> armies = new List<Army>();
         [Tooltip("전투 결과: 비어 있으면 진행 중, \"승리\" 또는 \"패배\"")] public string outcome;
 
@@ -35,6 +37,7 @@ namespace Babel
         readonly List<Projectile> projectiles = new List<Projectile>();
         readonly Stack<GameObject>[] pool = { new Stack<GameObject>(), new Stack<GameObject>(), new Stack<GameObject>() };
         Transform projectileRoot;
+        readonly List<ArmySpawn> slots = new List<ArmySpawn>();
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         MaterialPropertyBlock shotBlock;
@@ -55,18 +58,30 @@ namespace Babel
                 Register(d.unit);
             }
 
-            // 씬의 ArmySpawn 마다 군단을 만든다. 플레이어 군단 하나, 나머지는 AI.
-            var spawns = new List<ArmySpawn>(FindObjectsByType<ArmySpawn>(FindObjectsSortMode.None));
-            spawns.RemoveAll(sp => sp.race == null);
-            spawns.Sort((a, b) => a.team != b.team ? a.team.CompareTo(b.team) : string.CompareOrdinal(a.name, b.name));
-            foreach (ArmySpawn sp in spawns)
+            // 군단은 종족을 고른 뒤(StartBattle) 만든다. 씬의 ArmySpawn 은 자리(위치·방향·팀)만 정한다.
+            slots.AddRange(FindObjectsByType<ArmySpawn>(FindObjectsSortMode.None));
+            slots.Sort((a, b) => a.team != b.team ? a.team.CompareTo(b.team) : string.CompareOrdinal(a.name, b.name));
+            foreach (Unit u in units) u.SyncView(s);
+        }
+
+        // 플레이어가 고른 종족은 플레이어 자리에, 나머지 종족은 AI 자리에 차례로 들어간다.
+        public void StartBattle(RaceDefinition choice)
+        {
+            if (started) return;
+            var rest = new List<RaceDefinition>();
+            foreach (RaceDefinition r in races) if (r != null && r != choice) rest.Add(r);
+            float s = config.unitScale;
+            foreach (ArmySpawn sp in slots)
             {
                 bool isPlayer = sp.playerControlled && playerArmy == null;
-                var go = new GameObject($"군단 · {sp.race.raceName}{(isPlayer ? " (플레이어)" : "")}");
+                RaceDefinition race = isPlayer ? choice : rest.Count > 0 ? rest[0] : sp.race;
+                if (!isPlayer && rest.Count > 0) rest.RemoveAt(0);
+                if (race == null) continue;
+                var go = new GameObject($"군단 · {race.raceName}{(isPlayer ? " (플레이어)" : "")}");
                 go.transform.SetParent(transform, false);
                 var army = go.AddComponent<Army>();
                 Vector3 wp = sp.transform.position;
-                army.Build(this, sp.race, sp.team, isPlayer, new Vector2(wp.x, wp.z) / s, sp.headingDeg * Mathf.Deg2Rad);
+                army.Build(this, race, sp.team, isPlayer, new Vector2(wp.x, wp.z) / s, sp.headingDeg * Mathf.Deg2Rad);
                 armies.Add(army);
                 if (isPlayer) playerArmy = army;
                 else
@@ -78,10 +93,12 @@ namespace Babel
             if (playerArmy == null) { Debug.LogError("[Babel] 플레이어 ArmySpawn(playerControlled)이 없습니다."); enabled = false; return; }
             player.Init(this, playerArmy, battleCamera);
             foreach (Unit u in units) u.SyncView(s);
+            started = true;
         }
 
         void Update()
         {
+            if (!started) return;
             float dt = Mathf.Clamp(Time.deltaTime, 0.001f, 0.05f);
             time += dt;
             player.HandleInput();

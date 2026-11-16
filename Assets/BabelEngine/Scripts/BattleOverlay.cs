@@ -19,8 +19,11 @@ namespace Babel
         LineRenderer[] destRing, destLine, meleeLine, pingRing;
         float pixel, scale;
 
-        void Start()
+        bool ready;
+
+        void Init()
         {
+            ready = true;
             int n = world.playerArmy.squads.Count;
             rangeRing = Make("사거리", true);
             limitRing = Make("제한 원 (지름 D)", true);
@@ -88,6 +91,8 @@ namespace Babel
 
         void LateUpdate()
         {
+            if (world.playerArmy == null) return;
+            if (!ready) Init();
             Army army = world.playerArmy;
             PlayerController pc = world.player;
             BattleConfig C = world.config;

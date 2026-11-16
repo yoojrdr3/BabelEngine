@@ -46,12 +46,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Babel.Unit
   radius: 11.2
-  maxHp: 20
+  maxHp: 14
   lungeDistance: 6
   visual: {fileID: 6314274849782288967}
   bodyRenderer: {fileID: 7223134896722105826}
   team: 0
-  hp: 20
+  hp: 14
   dead: 0
   pos: {x: 0, y: 0}
   vel: {x: 0, y: 0}

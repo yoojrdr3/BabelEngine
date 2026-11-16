@@ -8,6 +8,7 @@ namespace Babel
     {
         public string raceName = "종족";
         public Color color = Color.white;
+        [TextArea(2, 4)] public string description;
 
         [Header("프리팹")]
         public Unit commanderPrefab;
