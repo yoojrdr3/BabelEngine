@@ -50,7 +50,8 @@ namespace Babel
 
             fireCd -= dt;
             float range = army.Range;
-            Unit t = w.NearestEnemy(army.team, me.pos, e => (e.pos - me.pos).magnitude <= range);
+            // 사거리 안에 적 지휘관이 있으면 그쪽을 집중 사격, 없으면 가장 가까운 적.
+            Unit t = (foe.pos - me.pos).magnitude <= range ? foe : w.NearestEnemy(army.team, me.pos, e => (e.pos - me.pos).magnitude <= range);
             if (t != null)
             {
                 me.facing = BattleMath.Angle(t.pos - me.pos);

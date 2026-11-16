@@ -17,10 +17,78 @@ MonoBehaviour:
   commanderMaxSpeed: 260
   commanderAccel: 14
   commanderRadius: 18
+  D: 1440
+  squadLeaderRadius: 16
+  steer: 3
+  steerMax: 480
+  returnTimeout: 6
+  reengageDelay: 1
+  squadStart:
+  - {x: -340, y: 240}
+  - {x: 340, y: 240}
+  - {x: -340, y: -260}
+  - {x: 340, y: -260}
+  memberScale: 0.7
+  memberSpacing: 3
+  memberMaxSpeed: 760
+  memberGain: 4.5
+  memberAccel: 14
+  memberFireCooldown: 1.3
+  memberMeleeDamage: 1
+  memberMeleeCooldown: 0.75
+  formation:
+  - {x: -12, y: -40}
+  - {x: -12, y: 40}
+  - {x: -46, y: -18}
+  - {x: -46, y: 18}
+  meleeRingDeg:
+  - 72
+  - -72
+  - 144
+  - -144
+  rangeMul: 1
+  bolt:
+    speed: 950
+    radius: 5
+    damage: 1
+  skill:
+    speed: 720
+    radius: 9
+    damage: 3
+  auto:
+    speed: 900
+    radius: 4
+    damage: 1
+  autoCooldown: 0.9
+  meleeReach: 44
+  meleeDamage: 2
+  meleeCooldown: 0.55
+  meleeLeaveMargin: 16
+  enemyRadius: 20
+  enemyHp: 30
+  enemyRespawn: 2.5
+  commanderHp: 100
+  leaderHp: 40
+  memberHp: 14
+  squadRespawn: 20
+  reinforceInterval: 14
+  aiFireCooldown: 1.3
+  aiPreferredRange: 0.75
+  aiReorderInterval: 1.5
+  rallySlot: 70
+  rallyArrive: 40
+  rallyTimeout: 8
   camFollow: 5
   camPitch: 55
+  camSquadBias: 0.75
   zoomAvatar: 1.75
+  zoomSquadNear: 1
+  zoomSquadFar: 0.6
+  zoomBandHysteresis: 20
+  modeZoomFollow: 5
+  wheelZoomFollow: 14
   zoomMin: 0.3
   zoomMax: 2
-  wheelZoomFollow: 14
   refHalfHeight: 450
+  doubleClickTime: 0.3
+  doubleClickPixels: 8

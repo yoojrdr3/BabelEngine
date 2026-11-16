@@ -66,11 +66,11 @@ namespace Babel
         public float enemyRespawn = 2.5f;
 
         [Header("체력·재편성")]
-        public float commanderHp = 150f;
-        public float leaderHp = 60f;
-        public float memberHp = 20f;
-        [Tooltip("전멸한 분대가 지휘관 곁에서 다시 편성되기까지(초)")] public float squadRespawn = 12f;
-        [Tooltip("쓰러진 분대원 1명이 보충되는 간격(초)")] public float reinforceInterval = 8f;
+        public float commanderHp = 60f;
+        public float leaderHp = 40f;
+        public float memberHp = 14f;
+        [Tooltip("전멸한 분대가 지휘관 곁에서 다시 편성되기까지(초)")] public float squadRespawn = 20f;
+        [Tooltip("쓰러진 분대원 1명이 보충되는 간격(초)")] public float reinforceInterval = 14f;
 
         [Header("AI 지휘관")]
         public float aiFireCooldown = 0.8f;

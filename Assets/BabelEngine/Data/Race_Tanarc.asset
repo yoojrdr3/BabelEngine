@@ -20,8 +20,8 @@ MonoBehaviour:
   hpMul: 0.8
   speedMul: 1.1
   tetherMul: 1.25
-  rangeMul: 1.2
+  rangeMul: 1
   meleeDamageMul: 0.7
-  rangedDamageMul: 1.4
+  rangedDamageMul: 1
   noRetreat: 0
   avoidMelee: 1
