@@ -23,6 +23,8 @@ namespace Babel
 
         [HideInInspector] public float facingHold, lunge, flash, fireCd, meleeCd;
         [HideInInspector] public bool isMember;
+        [HideInInspector] public Squad squad;
+        [HideInInspector] public Army army;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         MaterialPropertyBlock mpb;

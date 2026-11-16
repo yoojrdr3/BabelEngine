@@ -24,7 +24,10 @@ namespace Babel
         public Unit rangedTarget;
         [Tooltip("0 이하일 때만 근접 돌격. Infinity = 지정 위치 도착 전까지 금지")] public float engageLock;
 
-        [HideInInspector] public float firedAt = -9f, attackedAt = -9f, hitAt = -9f;
+        [Tooltip("전멸. respawn 초 뒤 지휘관 곁에서 재편성")] public bool wiped;
+        public float respawn;
+
+        [HideInInspector] public float firedAt = -9f, attackedAt = -9f, hitAt = -9f, reinforce;
 
         public void SetState(SquadState s)
         {

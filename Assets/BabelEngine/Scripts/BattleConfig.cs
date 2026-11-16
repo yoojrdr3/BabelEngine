@@ -65,6 +65,18 @@ namespace Babel
         public float enemyHp = 30f;
         public float enemyRespawn = 2.5f;
 
+        [Header("체력·재편성")]
+        public float commanderHp = 150f;
+        public float leaderHp = 60f;
+        public float memberHp = 20f;
+        [Tooltip("전멸한 분대가 지휘관 곁에서 다시 편성되기까지(초)")] public float squadRespawn = 12f;
+        [Tooltip("쓰러진 분대원 1명이 보충되는 간격(초)")] public float reinforceInterval = 8f;
+
+        [Header("AI 지휘관")]
+        public float aiFireCooldown = 0.8f;
+        [Tooltip("적 지휘관과 유지하려는 거리 = 사거리 × 이 값")] public float aiPreferredRange = 0.75f;
+        public float aiReorderInterval = 1.5f;
+
         [Header("집결 (아바타 모드 우클릭)")]
         public float rallySlot = 70f;
         public float rallyArrive = 40f;
@@ -98,6 +110,11 @@ namespace Babel
         public static float Damp(float k, float dt) => 1f - Mathf.Exp(-k * dt);
         public static Vector2 Dir(float a) => new Vector2(Mathf.Cos(a), Mathf.Sin(a));
         public static float Angle(Vector2 v) => Mathf.Atan2(v.y, v.x);
+        public static Vector2 Rotate(Vector2 v, float a)
+        {
+            float c = Mathf.Cos(a), s = Mathf.Sin(a);
+            return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
+        }
         public static Vector2 Norm(Vector2 v, Vector2 fallback) { float l = v.magnitude; return l > 1e-6f ? v / l : fallback; }
         public static float LerpAngle(float a, float b, float t) => a + Mathf.DeltaAngle(a * Mathf.Rad2Deg, b * Mathf.Rad2Deg) * Mathf.Deg2Rad * t;
 
