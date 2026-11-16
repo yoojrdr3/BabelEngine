@@ -47,6 +47,13 @@ namespace Babel
             Mouse ms = Mouse.current;
             if (kb == null || ms == null) return;
 
+            if (!string.IsNullOrEmpty(world.outcome) && kb.rKey.wasPressedThisFrame)
+            {
+                UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+                return;
+            }
+            if (army.defeated) { army.moveInput = Vector2.zero; return; }
+
             army.moveInput = new Vector2(
                 (kb.dKey.isPressed ? 1 : 0) - (kb.aKey.isPressed ? 1 : 0),
                 (kb.wKey.isPressed ? 1 : 0) - (kb.sKey.isPressed ? 1 : 0));
@@ -156,16 +163,17 @@ namespace Babel
                 Unit red = army.Commander;
                 float a = BattleMath.Angle(cursor - red.pos);
                 red.facing = a;
-                world.SpawnProjectile(ShotKind.Bolt, army.team, red.pos, a);
+                world.SpawnProjectile(ShotKind.Bolt, army, red.pos, a);
             }
             else
             {
                 Squad s = army.squads[selected];
+                if (s.wiped) return;
                 float a = BattleMath.Angle(cursor - s.leader.pos);
                 s.leader.facing = a;
                 s.leader.facingHold = 0.7f;
                 s.attackedAt = world.time;
-                world.SpawnProjectile(ShotKind.Skill, army.team, s.leader.pos, a);
+                world.SpawnProjectile(ShotKind.Skill, army, s.leader.pos, a);
             }
         }
 
@@ -246,7 +254,7 @@ namespace Babel
         void UpdateZoomBand(bool force)
         {
             if (camFocus < 0) return;
-            float d = army.squads[camFocus].dist, r = C.D / 2f, h = force ? 0f : C.zoomBandHysteresis;
+            float d = army.squads[camFocus].dist, r = army.D / 2f, h = force ? 0f : C.zoomBandHysteresis;
             bool far = squadFar ? d > r - h : d > r + h;
             if (far != squadFar || force) { squadFar = far; ApplyModeZoom(); }
         }

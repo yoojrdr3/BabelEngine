@@ -1,4 +1,3 @@
-#if BABEL_STAGE2 // 2단계 초안. Army/BattleWorld 개편이 끝나면 이 줄과 마지막 #endif 를 지운다 (HANDOFF.md 참고)
 using UnityEngine;
 
 namespace Babel
@@ -31,7 +30,12 @@ namespace Babel
             strafeT -= dt;
             if (strafeT <= 0f) { strafeT = Random.Range(2f, 4f); strafeSign = -strafeSign; }
             if (d > want) army.moveInput = n;
-            else if (d < want * 0.6f) army.moveInput = -n;
+            else if (d < want * 0.6f)
+            {
+                // 물러나되 벽에 몰리지 않도록 전장 중앙 쪽으로 휜다.
+                Vector2 inward = -me.pos / C.worldHalf;
+                army.moveInput = BattleMath.Norm(-n + inward * 1.5f, -n);
+            }
             else army.moveInput = new Vector2(-n.y, n.x) * (strafeSign * 0.35f);
 
             // 기본 대형을 적 쪽으로 돌려 둔다(명령이 아니라 지정 위치만 바꾸므로 자동 전투를 끊지 않는다).
@@ -60,4 +64,3 @@ namespace Babel
         }
     }
 }
-#endif

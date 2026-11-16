@@ -3,19 +3,18 @@ using UnityEngine;
 
 namespace Babel
 {
-    [System.Serializable]
-    public class ArmyPrefabs
-    {
-        public Unit commander, commanderMember, squadLeader, squadMember;
-    }
-
     // 군단 = 지휘관 분대 + 따라다니는 분대들. 웹 프로토타입 update() 의 빨강/파랑 분대 로직.
-    // 조작 주체(플레이어, 나중엔 AI)는 moveInput / cursor 를 넣고 명령 함수를 부른다.
+    // 조작 주체(플레이어 또는 AICommander)는 moveInput / cursor 를 넣고 명령 함수를 부른다.
+    // 종족(RaceDefinition)의 배율과 성향이 체력·속도·D·사거리·피해·근접 행동에 반영된다.
     public class Army : MonoBehaviour
     {
         public BattleConfig config;
         public BattleWorld world;
+        public RaceDefinition race;
         public int team;
+        public bool isPlayer;
+        [Tooltip("지휘관이 죽어 군단이 붕괴함")] public bool defeated;
+        public AICommander ai;
         public Squad commanderSquad;
         public List<Squad> squads = new List<Squad>();
 
@@ -33,21 +32,24 @@ namespace Babel
         public Vector2 cursor;
 
         public Unit Commander => commanderSquad.leader;
-        public float Range => config.Range;
-
-        static readonly Color MeleeColor = new Color(0.11f, 0.07f, 0.92f);
+        public float D => config.D * race.tetherMul;
+        public float Range => config.D * config.rangeMul * race.rangeMul;
 
         // ------------------------------------------------------------ 생성
-        public void Build(BattleWorld w, int armyTeam, ArmyPrefabs prefabs, Vector2 origin)
+        // heading: 시작할 때 바라보는 방향(라디안). π/2 = +Z(화면 위).
+        public void Build(BattleWorld w, RaceDefinition r, int armyTeam, bool player, Vector2 origin, float heading)
         {
             world = w;
             config = w.config;
+            race = r;
             team = armyTeam;
-            commanderSquad = MakeSquad("지휘관 분대", 0, prefabs.commander, prefabs.commanderMember, origin, Mathf.PI / 2f);
+            isPlayer = player;
+            commanderSquad = MakeSquad("지휘관 분대", 0, r.commanderPrefab, r.memberPrefab, origin, heading, config.commanderHp);
+            float rot = heading - Mathf.PI / 2f;
             for (int i = 0; i < config.squadStart.Length; i++)
             {
-                Vector2 o = config.squadStart[i];
-                Squad s = MakeSquad($"분대 {i + 1}", i + 1, prefabs.squadLeader, prefabs.squadMember, origin + o, BattleMath.Angle(o));
+                Vector2 o = BattleMath.Rotate(config.squadStart[i], rot);
+                Squad s = MakeSquad($"분대 {i + 1}", i + 1, r.leaderPrefab, r.memberPrefab, origin + o, BattleMath.Angle(o), config.leaderHp);
                 s.offset = o;
                 s.dir = BattleMath.Norm(o, Vector2.up);
                 s.dist = o.magnitude;
@@ -56,17 +58,17 @@ namespace Babel
             }
         }
 
-        Squad MakeSquad(string squadName, int id, Unit leaderPrefab, Unit memberPrefab, Vector2 pos, float heading)
+        Squad MakeSquad(string squadName, int id, Unit leaderPrefab, Unit memberPrefab, Vector2 pos, float heading, float leaderBaseHp)
         {
             var go = new GameObject(squadName);
             go.transform.SetParent(transform, false);
             var s = go.AddComponent<Squad>();
             s.id = id;
             s.heading = heading;
-            s.leader = Spawn(leaderPrefab, go.transform, id == 0 ? "지휘관" : "분대장", pos, heading, false);
+            s.leader = Spawn(leaderPrefab, s, id == 0 ? "지휘관" : "분대장", pos, heading, false, leaderBaseHp);
             for (int k = 0; k < config.formation.Length; k++)
             {
-                Unit m = Spawn(memberPrefab, go.transform, $"분대원 {k + 1}", SlotPos(s, k), heading, true);
+                Unit m = Spawn(memberPrefab, s, $"분대원 {k + 1}", SlotPos(s, k), heading, true, config.memberHp);
                 m.fireCd = 0.3f + k * 0.3f;
                 m.meleeCd = k * 0.15f;
                 s.members.Add(m);
@@ -74,11 +76,14 @@ namespace Babel
             return s;
         }
 
-        Unit Spawn(Unit prefab, Transform parent, string unitName, Vector2 pos, float facing, bool member)
+        Unit Spawn(Unit prefab, Squad s, string unitName, Vector2 pos, float facing, bool member, float baseHp)
         {
-            Unit u = Instantiate(prefab, parent);
+            Unit u = Instantiate(prefab, s.transform);
             u.name = unitName;
             u.isMember = member;
+            u.maxHp = baseHp * race.hpMul; // Setup 이 hp 를 maxHp 로 채우므로 먼저 넣는다
+            u.squad = s;
+            u.army = this;
             u.Setup(team, pos, facing);
             world.Register(u);
             return u;
@@ -93,8 +98,8 @@ namespace Babel
         }
 
         // 제한 원: 지름 D, 한쪽 끝이 지휘관에 닿고 분대 방향으로 뻗는다.
-        public Vector2 LimitCenter(Squad s) => Commander.pos + s.dir * (config.D / 2f);
-        public bool InLimitCircle(Squad s, Vector2 p, float margin) => (p - LimitCenter(s)).magnitude <= config.D / 2f + margin;
+        public Vector2 LimitCenter(Squad s) => Commander.pos + s.dir * (D / 2f);
+        public bool InLimitCircle(Squad s, Vector2 p, float margin) => (p - LimitCenter(s)).magnitude <= D / 2f + margin;
 
         public bool IsPassive(Squad s)
         {
@@ -106,6 +111,7 @@ namespace Babel
         public string StatusOf(int i)
         {
             Squad s = squads[i];
+            if (s.wiped) return $"재편성 중 ({Mathf.CeilToInt(s.respawn)}초)";
             bool following = followAll || followIdx == i;
             if (following && gathering) return followPassive ? "집결 중 (비전투)" : "집결 중";
             if (following) return followPassive ? "커서 추적 (비전투)" : "커서 추적";
@@ -127,8 +133,8 @@ namespace Babel
             Squad s = squads[idx];
             Vector2 o = w - Commander.pos;
             float d = o.magnitude;
-            bool clamped = d > config.D;
-            if (clamped) o *= config.D / d;
+            bool clamped = d > D;
+            if (clamped) o *= D / d;
             s.offset = o;
             s.target = null;
             s.engageLock = float.PositiveInfinity;
@@ -167,16 +173,110 @@ namespace Babel
             followPassive = false;
         }
 
+        // ------------------------------------------------------------ 손실 처리
+        static void Revive(Unit u, Vector2 pos, float hp)
+        {
+            u.dead = false;
+            u.hp = hp;
+            u.pos = pos;
+            u.vel = Vector2.zero;
+            u.flash = 0f;
+            u.lunge = 0f;
+        }
+
+        void Defeat()
+        {
+            defeated = true;
+            StopFollow();
+            foreach (Unit u in world.units)
+                if (u.army == this) { u.dead = true; u.hp = 0f; }
+            world.Toast($"{race.raceName} 군단 붕괴 — 지휘관 전사");
+        }
+
+        // 분대장 승계, 전멸, 재편성, 분대원 보충. 계속 싸울 수 있는 분대면 true.
+        bool ManageSquad(Squad s, float dt)
+        {
+            Unit L = s.leader;
+            if (s.wiped)
+            {
+                s.respawn -= dt;
+                if (s.respawn <= 0f) Reform(s);
+                return false;
+            }
+            if (L.dead)
+            {
+                Unit heir = null;
+                foreach (Unit m in s.members) if (!m.dead) { heir = m; break; }
+                if (heir == null)
+                {
+                    s.wiped = true;
+                    s.respawn = config.squadRespawn;
+                    s.target = null;
+                    s.rangedTarget = null;
+                    return false;
+                }
+                Revive(L, heir.pos, L.maxHp * 0.6f);
+                L.vel = heir.vel;
+                heir.dead = true;
+                heir.hp = 0f;
+            }
+            ReinforceMembers(s, dt);
+            return true;
+        }
+
+        void ReinforceMembers(Squad s, float dt)
+        {
+            Unit dead = null;
+            foreach (Unit m in s.members) if (m.dead) { dead = m; break; }
+            if (dead == null) { s.reinforce = 0f; return; }
+            s.reinforce += dt;
+            if (s.reinforce < config.reinforceInterval) return;
+            s.reinforce = 0f;
+            Revive(dead, s.leader.pos, dead.maxHp);
+            dead.fireCd = 0.3f;
+            dead.meleeCd = 0f;
+        }
+
+        // 전멸한 분대를 지휘관 곁에서 전원 체력 가득 재편성한다.
+        void Reform(Squad s)
+        {
+            Unit red = Commander;
+            Vector2 at = red.pos + BattleMath.Norm(s.offset, s.dir) * 70f;
+            Revive(s.leader, at, s.leader.maxHp);
+            s.leader.fireCd = 0.3f;
+            s.leader.meleeCd = 0f;
+            s.heading = BattleMath.Angle(s.dir);
+            for (int k = 0; k < s.members.Count; k++)
+            {
+                Unit m = s.members[k];
+                Revive(m, SlotPos(s, k), m.maxHp);
+                m.fireCd = 0.3f + k * 0.3f;
+                m.meleeCd = k * 0.15f;
+            }
+            s.wiped = false;
+            s.reinforce = 0f;
+            s.target = null;
+            s.rangedTarget = null;
+            s.engageLock = float.PositiveInfinity;
+            s.SetState(SquadState.Return);
+        }
+
         // ------------------------------------------------------------ 매 프레임
         public void Tick(float dt)
         {
+            if (defeated) return;
             BattleConfig C = config;
             float H = C.worldHalf, range = Range, time = world.time;
+            float tether = D;
             Unit red = Commander;
+
+            if (red.dead) { Defeat(); return; }
+            ReinforceMembers(commanderSquad, dt);
+            foreach (Squad s in squads) ManageSquad(s, dt);
 
             // 지휘관 이동
             Vector2 inp = Vector2.ClampMagnitude(moveInput, 1f);
-            red.vel += (inp * C.commanderMaxSpeed - red.vel) * BattleMath.Damp(C.commanderAccel, dt);
+            red.vel += (inp * (C.commanderMaxSpeed * race.speedMul) - red.vel) * BattleMath.Damp(C.commanderAccel, dt);
             if (inp == Vector2.zero && red.vel.magnitude < 2f) red.vel = Vector2.zero;
             Vector2 prev = red.pos;
             red.pos = new Vector2(Mathf.Clamp(red.pos.x + red.vel.x * dt, -H, H), Mathf.Clamp(red.pos.y + red.vel.y * dt, -H, H));
@@ -190,22 +290,26 @@ namespace Babel
                 gatherTime += dt;
                 bool arrived = true;
                 foreach (Squad s in squads)
+                {
+                    if (s.wiped) continue;
                     if ((red.pos + s.offset - s.leader.pos).magnitude >= C.rallyArrive) { arrived = false; break; }
+                }
                 if (arrived || gatherTime > C.rallyTimeout)
                 {
                     gathering = false;
-                    world.Toast("모든 분대: 집결 완료 — 커서 추적 시작");
+                    if (isPlayer) world.Toast("모든 분대: 집결 완료 — 커서 추적 시작");
                 }
             }
             else if (followAll) GroupOrder(cursor, false);
 
-            // 지휘관 분대원: 대형 유지 + 사거리 안 적 자동 사격 (지휘관 본인은 좌클릭으로만 쏜다)
+            // 지휘관 분대원: 대형 유지 + 사거리 안 적 자동 사격 (지휘관 본인은 좌클릭/AI 로만 쏜다)
             UpdateHeading(commanderSquad, rv, dt);
             commanderSquad.rangedTarget = world.NearestEnemy(team, red.pos, e => (e.pos - red.pos).magnitude <= range);
             UpdateMembers(commanderSquad, rv, null, commanderSquad.rangedTarget, ShotKind.Bolt, !ceasefire, dt);
 
             foreach (Squad s in squads)
             {
+                if (s.wiped || s.leader.dead) continue;
                 Unit L = s.leader;
                 s.stateTime += dt;
                 L.fireCd -= dt;
@@ -223,6 +327,15 @@ namespace Babel
                         s.target = null;
                         s.SetState(SquadState.Return);
                     }
+                    else if (race.noRetreat)
+                    {
+                        // 물면 안 놓는다: 대상이 지휘관에게서 너무 멀어졌을 때만 포기
+                        if ((e.pos - red.pos).magnitude > tether + C.meleeReach + 60f)
+                        {
+                            s.target = null;
+                            s.SetState(SquadState.Return);
+                        }
+                    }
                     else if (!InLimitCircle(s, e.pos, C.meleeLeaveMargin))
                     {
                         // 싸움이 제한 원 밖으로 나감: 지휘관 쪽으로 물러난 뒤 복귀
@@ -231,7 +344,7 @@ namespace Babel
                         s.SetState(SquadState.Retreat);
                     }
                 }
-                if (!passive && (s.state == SquadState.Hold || s.state == SquadState.Return) && s.engageLock <= 0f)
+                if (!passive && !race.avoidMelee && (s.state == SquadState.Hold || s.state == SquadState.Return) && s.engageLock <= 0f)
                 {
                     Unit e = world.NearestEnemy(team, L.pos, en => InLimitCircle(s, en.pos, 0f));
                     if (e != null) { s.target = e; s.SetState(SquadState.Melee); }
@@ -255,11 +368,11 @@ namespace Babel
                 // 지휘관의 움직임을 그대로 실어 주고(상대 위치 유지), 목표로 부드럽게 보정한 뒤 D 제한을 강제한다.
                 Vector2 old = L.pos;
                 if (carry) L.pos += rv * dt;
-                Vector2 c = Vector2.ClampMagnitude((t - L.pos) * BattleMath.Damp(C.steer, dt), C.steerMax * dt);
+                Vector2 c = Vector2.ClampMagnitude((t - L.pos) * BattleMath.Damp(C.steer, dt), C.steerMax * race.speedMul * dt);
                 L.pos += c;
 
                 Vector2 d = L.pos - red.pos;
-                if (d.magnitude > C.D) L.pos = red.pos + d.normalized * C.D;
+                if (d.magnitude > tether) L.pos = red.pos + d.normalized * tether;
                 L.pos = new Vector2(Mathf.Clamp(L.pos.x, -H, H), Mathf.Clamp(L.pos.y, -H, H));
                 d = L.pos - red.pos;
                 s.dist = d.magnitude;
@@ -291,7 +404,7 @@ namespace Babel
                             L.meleeCd = C.meleeCooldown;
                             L.lunge = 1f;
                             s.attackedAt = time;
-                            world.Damage(e, C.meleeDamage, MeleeColor);
+                            world.Damage(e, C.meleeDamage * race.meleeDamageMul, this);
                         }
                     }
                 }
@@ -302,7 +415,7 @@ namespace Babel
                 if (s.rangedTarget != null && L.fireCd <= 0f)
                 {
                     float a = BattleMath.Angle(s.rangedTarget.pos - L.pos);
-                    world.SpawnProjectile(ShotKind.Auto, team, L.pos, a);
+                    world.SpawnProjectile(ShotKind.Auto, this, L.pos, a);
                     L.fireCd = C.autoCooldown;
                     L.facing = a;
                     L.facingHold = 0.4f;
@@ -327,9 +440,11 @@ namespace Babel
             BattleConfig C = config;
             Unit L = S.leader;
             float range = Range;
+            float maxSpeed = C.memberMaxSpeed * race.speedMul;
             for (int k = 0; k < S.members.Count; k++)
             {
                 Unit m = S.members[k];
+                if (m.dead) continue;
                 m.fireCd -= dt;
                 m.meleeCd -= dt;
                 if (m.facingHold > 0f) m.facingHold -= dt;
@@ -346,7 +461,7 @@ namespace Babel
                 }
                 else t = SlotPos(S, k);
 
-                Vector2 dv = Vector2.ClampMagnitude(fv + (t - m.pos) * C.memberGain, C.memberMaxSpeed);
+                Vector2 dv = Vector2.ClampMagnitude(fv + (t - m.pos) * C.memberGain, maxSpeed);
                 m.vel += (dv - m.vel) * BattleMath.Damp(C.memberAccel, dt);
                 m.pos += m.vel * dt;
                 if (m.facingHold <= 0f && m.vel.magnitude > 30f) m.facing = BattleMath.Angle(m.vel);
@@ -362,7 +477,7 @@ namespace Babel
                             m.meleeCd = C.memberMeleeCooldown * (0.85f + Random.value * 0.3f);
                             m.lunge = 1f;
                             S.attackedAt = world.time;
-                            world.Damage(e, C.memberMeleeDamage, MeleeColor);
+                            world.Damage(e, C.memberMeleeDamage * race.meleeDamageMul, this);
                         }
                     }
                 }
@@ -370,7 +485,7 @@ namespace Babel
                          (rangedTarget.pos - m.pos).magnitude <= range)
                 {
                     float ang = BattleMath.Angle(rangedTarget.pos - m.pos);
-                    world.SpawnProjectile(kind, team, m.pos, ang);
+                    world.SpawnProjectile(kind, this, m.pos, ang);
                     S.attackedAt = world.time;
                     m.fireCd = C.memberFireCooldown * (0.85f + Random.value * 0.3f);
                     m.facing = ang;

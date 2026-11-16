@@ -96,19 +96,20 @@ namespace Babel
             pixel = cam.orthographicSize * 2f / Mathf.Max(1, Screen.height); // 화면 1픽셀의 월드 길이
             Unit red = army.Commander;
             int sel = pc.selected;
-            Unit src = sel < 0 ? red : army.squads[sel].leader;
+            Unit src = sel < 0 || army.squads[sel].wiped ? red : army.squads[sel].leader;
+            bool selOk = sel >= 0 && !army.squads[sel].wiped;
 
             // 사거리: 지금 좌클릭으로 쏘는 쪽
-            Circle(rangeRing, src.pos, army.Range, sel < 0 ? A(Red, 0.45f) : A(Blue, 0.5f), 1.5f);
-            Line(aimLine, src.pos, pc.cursor, sel < 0 ? A(Red, 0.4f) : A(Skill, 0.75f), 1.5f);
+            Circle(rangeRing, src.pos, army.Range, !selOk ? A(Red, 0.45f) : A(Blue, 0.5f), 1.5f);
+            Line(aimLine, src.pos, pc.cursor, !selOk ? A(Red, 0.4f) : A(Skill, 0.75f), 1.5f);
 
-            if (sel >= 0)
+            if (selOk)
             {
                 Squad s = army.squads[sel];
-                Circle(limitRing, army.LimitCenter(s), C.D / 2f, new Color(0.07f, 0.07f, 0.07f, 0.9f), 1.8f);
+                Circle(limitRing, army.LimitCenter(s), army.D / 2f, new Color(0.07f, 0.07f, 0.07f, 0.9f), 1.8f);
                 Circle(selectRing, s.leader.pos, 25f + Mathf.Sin(world.time * 6f) * 2f, Blue, 2.5f);
                 Vector2 o = pc.cursor - red.pos;
-                if (o.magnitude > C.D) o *= C.D / o.magnitude;
+                if (o.magnitude > army.D) o *= army.D / o.magnitude;
                 Circle(previewRing, red.pos + o, 16f, A(Blue, 0.35f), 1.2f);
             }
             else limitRing.enabled = selectRing.enabled = previewRing.enabled = false;
@@ -116,6 +117,7 @@ namespace Babel
             for (int i = 0; i < army.squads.Count; i++)
             {
                 Squad s = army.squads[i];
+                if (s.wiped) { destRing[i].enabled = destLine[i].enabled = meleeLine[i].enabled = false; continue; }
                 Vector2 dest = red.pos + s.offset;
                 float gap = (dest - s.leader.pos).magnitude;
                 bool isSel = i == sel;

@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db67a08554a853349b80d34d6e7387cb, type: 3}
+  m_Name: Race_Tanarc
+  m_EditorClassIdentifier: Assembly-CSharp::Babel.RaceDefinition
+  raceName: "\uD0C0\uB098\uB974\uD06C"
+  color: {r: 0.2, g: 0.5, b: 0.95, a: 1}
+  commanderPrefab: {fileID: 182740942547279787, guid: cb382929bf640c44faf37a47939afcca, type: 3}
+  leaderPrefab: {fileID: 4240797526482516885, guid: 21bbba3be73a60b43adf3e322fa4562e, type: 3}
+  memberPrefab: {fileID: 800850254631894128, guid: 7c5bbe91f7afe924cbadc822da617bfe, type: 3}
+  hpMul: 0.8
+  speedMul: 1.1
+  tetherMul: 1.25
+  rangeMul: 1.2
+  meleeDamageMul: 0.7
+  rangedDamageMul: 1.4
+  noRetreat: 0
+  avoidMelee: 1

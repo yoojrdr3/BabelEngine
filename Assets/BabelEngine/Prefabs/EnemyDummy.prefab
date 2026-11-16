@@ -185,6 +185,8 @@ MonoBehaviour:
   fireCd: 0
   meleeCd: 0
   isMember: 0
+  squad: {fileID: 0}
+  army: {fileID: 0}
 --- !u!114 &172939299081014941
 MonoBehaviour:
   m_ObjectHideFlags: 0

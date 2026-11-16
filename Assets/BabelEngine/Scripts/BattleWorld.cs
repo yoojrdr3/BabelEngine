@@ -7,7 +7,6 @@ namespace Babel
     public class BattleWorld : MonoBehaviour
     {
         public BattleConfig config;
-        public ArmyPrefabs playerPrefabs;
         public GameObject boltPrefab, skillPrefab, autoPrefab;
         public PlayerController player;
         public BattleCamera battleCamera;
@@ -15,6 +14,8 @@ namespace Babel
         [Header("실행 중")]
         public float time;
         public Army playerArmy;
+        public readonly List<Army> armies = new List<Army>();
+        [Tooltip("전투 결과: 비어 있으면 진행 중, \"승리\" 또는 \"패배\"")] public string outcome;
 
         public readonly List<Unit> units = new List<Unit>();
         public readonly List<DummyEnemy> dummies = new List<DummyEnemy>();
@@ -28,20 +29,19 @@ namespace Babel
 
         class Projectile
         {
-            public ShotKind kind; public int team; public Vector2 pos, vel; public float radius, damage, left;
+            public ShotKind kind; public Army army; public int team; public Vector2 pos, vel; public float radius, damage, left;
             public GameObject view;
         }
         readonly List<Projectile> projectiles = new List<Projectile>();
         readonly Stack<GameObject>[] pool = { new Stack<GameObject>(), new Stack<GameObject>(), new Stack<GameObject>() };
         Transform projectileRoot;
 
-        static readonly Color[] ShotColor =
-        {
-            new Color(1f, 0.42f, 0f), new Color(0f, 0.66f, 1f), new Color(0.36f, 0.49f, 1f),
-        };
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        MaterialPropertyBlock shotBlock;
 
         void Awake()
         {
+            shotBlock = new MaterialPropertyBlock();
             projectileRoot = new GameObject("투사체").transform;
             projectileRoot.SetParent(transform, false);
 
@@ -55,9 +55,27 @@ namespace Babel
                 Register(d.unit);
             }
 
-            var go = new GameObject("플레이어 군단");
-            playerArmy = go.AddComponent<Army>();
-            playerArmy.Build(this, 0, playerPrefabs, Vector2.zero);
+            // 씬의 ArmySpawn 마다 군단을 만든다. 플레이어 군단 하나, 나머지는 AI.
+            var spawns = new List<ArmySpawn>(FindObjectsByType<ArmySpawn>(FindObjectsSortMode.None));
+            spawns.RemoveAll(sp => sp.race == null);
+            spawns.Sort((a, b) => a.team != b.team ? a.team.CompareTo(b.team) : string.CompareOrdinal(a.name, b.name));
+            foreach (ArmySpawn sp in spawns)
+            {
+                bool isPlayer = sp.playerControlled && playerArmy == null;
+                var go = new GameObject($"군단 · {sp.race.raceName}{(isPlayer ? " (플레이어)" : "")}");
+                go.transform.SetParent(transform, false);
+                var army = go.AddComponent<Army>();
+                Vector3 wp = sp.transform.position;
+                army.Build(this, sp.race, sp.team, isPlayer, new Vector2(wp.x, wp.z) / s, sp.headingDeg * Mathf.Deg2Rad);
+                armies.Add(army);
+                if (isPlayer) playerArmy = army;
+                else
+                {
+                    army.ai = go.AddComponent<AICommander>();
+                    army.ai.army = army;
+                }
+            }
+            if (playerArmy == null) { Debug.LogError("[Babel] 플레이어 ArmySpawn(playerControlled)이 없습니다."); enabled = false; return; }
             player.Init(this, playerArmy, battleCamera);
             foreach (Unit u in units) u.SyncView(s);
         }
@@ -67,15 +85,30 @@ namespace Babel
             float dt = Mathf.Clamp(Time.deltaTime, 0.001f, 0.05f);
             time += dt;
             player.HandleInput();
-            playerArmy.Tick(dt);
+            foreach (Army a in armies)
+            {
+                if (a.defeated) continue;
+                if (a.ai != null) a.ai.Tick(dt);
+                a.Tick(dt);
+            }
             SeparateMembers();
             player.TickCamera(dt);
             TickDummies(dt);
             TickProjectiles(dt);
+            UpdateOutcome();
             for (int i = texts.Count - 1; i >= 0; i--) { texts[i].t += dt; if (texts[i].t >= texts[i].dur) texts.RemoveAt(i); }
             for (int i = pings.Count - 1; i >= 0; i--) { pings[i].t += dt; if (pings[i].t >= pings[i].dur) pings.RemoveAt(i); }
             float s = config.unitScale;
-            foreach (Unit u in units) u.SyncView(s);
+            foreach (Unit u in units) { u.flash = Mathf.Max(0f, u.flash - dt * 6f); u.SyncView(s); }
+        }
+
+        void UpdateOutcome()
+        {
+            if (!string.IsNullOrEmpty(outcome)) return;
+            if (playerArmy.defeated) { outcome = "패배"; return; }
+            foreach (Army a in armies)
+                if (a != playerArmy && !a.defeated) return;
+            outcome = "승리";
         }
 
         public void Register(Unit u) { units.Add(u); }
@@ -96,11 +129,29 @@ namespace Babel
             return best;
         }
 
-        public void Damage(Unit e, float dmg, Color color)
+        // 패배하지 않은 다른 팀 군단의 지휘관 중 가장 가까운 것.
+        public Unit NearestHostileCommander(Army self)
+        {
+            Unit best = null;
+            float bd = float.PositiveInfinity;
+            Vector2 p = self.Commander.pos;
+            foreach (Army a in armies)
+            {
+                if (a.defeated || a.team == self.team || a.Commander.dead) continue;
+                float d = (a.Commander.pos - p).sqrMagnitude;
+                if (d < bd) { bd = d; best = a.Commander; }
+            }
+            return best;
+        }
+
+        public void Damage(Unit e, float dmg, Army from)
         {
             if (e.dead) return;
             e.hp -= dmg;
             e.flash = 1f;
+            if (e.squad != null) e.squad.hitAt = time;
+            if (texts.Count >= 60) texts.RemoveAt(0);
+            Color color = from != null ? from.race.color : Color.white;
             texts.Add(new FloatText { pos = e.pos + new Vector2((Random.value - 0.5f) * 16f, 0f), text = "-" + dmg.ToString("0.#"), color = color, dur = 0.8f });
             if (e.hp <= 0f) e.dead = true;
         }
@@ -159,28 +210,39 @@ namespace Babel
                 }
                 if (d.patrolAmp > 0f)
                     u.pos = d.basePos + d.patrolAxis * (Mathf.Sin(time * d.patrolSpeed + d.phase) * d.patrolAmp);
-                u.flash = Mathf.Max(0f, u.flash - dt * 6f);
             }
         }
 
         // ------------------------------------------------------------ 투사체
         // 모든 원거리 공격은 같은 사거리를 쓴다. 쏜 위치에서 정확히 그 거리까지만 난다.
-        public void SpawnProjectile(ShotKind kind, int team, Vector2 from, float angle)
+        public void SpawnProjectile(ShotKind kind, Army a, Vector2 from, float angle)
         {
             ShotDef P = config.Shot(kind);
             Vector2 d = BattleMath.Dir(angle);
             var p = new Projectile
             {
-                kind = kind, team = team, pos = from + d * 20f, vel = d * P.speed,
-                radius = P.radius, damage = P.damage, left = Mathf.Max(1f, config.Range - 20f),
+                kind = kind, army = a, team = a.team, pos = from + d * 20f, vel = d * P.speed,
+                radius = P.radius, damage = P.damage * a.race.rangedDamageMul, left = Mathf.Max(1f, a.Range - 20f),
             };
             var stack = pool[(int)kind];
             GameObject prefab = kind == ShotKind.Bolt ? boltPrefab : kind == ShotKind.Skill ? skillPrefab : autoPrefab;
             p.view = stack.Count > 0 ? stack.Pop() : Instantiate(prefab, projectileRoot);
             p.view.transform.position = ViewPos(p.pos);
             p.view.SetActive(true);
+            Color col = a.race.color;
+            var rend = p.view.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                shotBlock.SetColor(BaseColorId, col);
+                rend.SetPropertyBlock(shotBlock);
+            }
             var trail = p.view.GetComponent<TrailRenderer>();
-            if (trail != null) trail.Clear();
+            if (trail != null)
+            {
+                trail.Clear();
+                trail.startColor = col;
+                trail.endColor = new Color(col.r, col.g, col.b, 0f);
+            }
             projectiles.Add(p);
         }
 
@@ -202,7 +264,7 @@ namespace Babel
                     if (u.dead || u.team == p.team) continue;
                     if (BattleMath.SegDist(u.pos, a, p.pos) < u.radius + p.radius) { hit = u; break; }
                 }
-                if (hit != null) Damage(hit, p.damage, ShotColor[(int)p.kind]);
+                if (hit != null) Damage(hit, p.damage, p.army);
                 if (hit != null || p.left <= 0f)
                 {
                     p.view.SetActive(false);
