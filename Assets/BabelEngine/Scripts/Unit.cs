@@ -12,6 +12,10 @@ namespace Babel
         [Tooltip("근접 공격 때 앞으로 튀는 거리")] public float lungeDistance = 6f;
         public Transform visual;
         public Renderer bodyRenderer;
+        [Tooltip("일러스트 빌보드(있으면 도형 대신 쓴다)")] public SpriteRenderer sprite;
+        [Tooltip("스프라이트가 오른쪽을 보는 그림이면 켠다. 이동 방향에 따라 좌우를 뒤집는다")] public bool flipByFacing;
+        public bool spriteFacesRight = true;
+        [Tooltip("스프라이트 판(카메라를 향해 서 있다)")] public Transform billboard;
 
         [Header("상태 (실행 중)")]
         public int team;
@@ -25,6 +29,8 @@ namespace Babel
         [HideInInspector] public bool isMember;
         [HideInInspector] public Squad squad;
         [HideInInspector] public Army army;
+
+        public static Quaternion billboardRot = Quaternion.Euler(55f, 0f, 0f);
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         MaterialPropertyBlock mpb;
@@ -53,7 +59,19 @@ namespace Babel
 
             if (visual != null && visual.gameObject.activeSelf == dead) visual.gameObject.SetActive(!dead);
 
+            if (billboard != null)
+            {
+                billboard.rotation = billboardRot;
+                if (sprite != null && flipByFacing && Mathf.Abs(d.x) > 0.2f)
+                    sprite.flipX = spriteFacesRight ? d.x < 0f : d.x > 0f;
+            }
+
             bool f = flash > 0.4f;
+            if (sprite != null && f != flashed)
+            {
+                flashed = f;
+                sprite.color = f ? new Color(1f, 0.45f, 0.45f) : Color.white;
+            }
             if (f != flashed && bodyRenderer != null)
             {
                 flashed = f;

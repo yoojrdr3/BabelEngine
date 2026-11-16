@@ -19,6 +19,8 @@ namespace Babel.EditorTools
         class RaceSpec
         {
             public string key, displayName, description;
+            public string[] sprites; // 지휘관·분대장·분대원 일러스트(Textures/Characters/{이름}.png)
+            public bool flip;        // 이동 방향에 따라 좌우 뒤집기(옆모습 그림)
             public Color color;
             public Look look;
             public float hp, speed, tether, range, melee, ranged;
@@ -31,15 +33,15 @@ namespace Babel.EditorTools
 
         static readonly RaceSpec[] Races =
         {
-            new RaceSpec { key = "Metaphos", displayName = "메타포스", color = new Color(0.50f, 0.45f, 0.36f), look = Look.Block,
+            new RaceSpec { key = "Metaphos", displayName = "메타포스", color = new Color(0.50f, 0.45f, 0.36f), look = Look.Block, sprites = new[] { "Metaphos", "Metaphos", "Metaphos" }, flip = true,
                 description = "석판 중장갑. 뭉쳐서 밀고 가는 벽: 체력이 높고 근접이 강하지만 느리고 분대가 멀리 못 간다.",
                 hp = 1.6f, speed = 0.8f, tether = 0.7f, range = 0.6f, melee = 1.5f, ranged = 0.8f,
                 team = 0, player = true, pos = new Vector2(0, -1900), heading = 90f },
-            new RaceSpec { key = "Tanarc", displayName = "타나르크", color = new Color(0.20f, 0.50f, 0.95f), look = Look.Tall,
+            new RaceSpec { key = "Tanarc", displayName = "타나르크", color = new Color(0.20f, 0.50f, 0.95f), look = Look.Tall, sprites = new[] { "Tanarc", "Tanarc", "Tanarc" },
                 description = "흰 장갑과 푸른 회로. 넓게 펼쳐 쏜다: 사거리와 사격이 강하지만 체력이 낮고 근접을 피한다.",
                 hp = 0.8f, speed = 1.1f, tether = 1.25f, range = 1.2f, melee = 0.7f, ranged = 1.4f, avoidMelee = true,
                 team = 1, pos = new Vector2(-1500, 900), heading = 0f },
-            new RaceSpec { key = "Demon", displayName = "악마", color = new Color(0.75f, 0.12f, 0.10f), look = Look.Horned,
+            new RaceSpec { key = "Demon", displayName = "악마", color = new Color(0.75f, 0.12f, 0.10f), look = Look.Horned, sprites = new[] { "Demon_Commander", "Demon_Leader", "Demon_Member" },
                 description = "혼돈·파괴·종말의 악마. 물면 안 놓는 돌격: 근접과 속도가 높고 물러나지 않는다.",
                 hp = 1.0f, speed = 1.25f, tether = 1.0f, range = 0.7f, melee = 1.6f, ranged = 0.6f, noRetreat = true,
                 team = 2, pos = new Vector2(1500, 900), heading = 180f },
@@ -78,6 +80,16 @@ namespace Babel.EditorTools
             var lineMat = Mat("Line", "Sprites/Default", Color.white);
             Color boltC = new Color(1f, 0.42f, 0f), skillC = new Color(0f, 0.66f, 1f), autoC = new Color(0.36f, 0.49f, 1f);
 
+            // --- 일러스트 스프라이트(Tools/make_sprites.py 가 만든다)와 이펙트
+            Directory.CreateDirectory($"{Root}/Textures/Characters");
+            AssetDatabase.Refresh();
+            foreach (string f in Directory.GetFiles($"{Root}/Textures/Characters", "*.png"))
+                ConfigureSprite(f.Replace('\\', '/'), 512);
+            Sprite ringSprite = RingSprite();
+            var fxMat = Mat("Fx", "Universal Render Pipeline/Particles/Unlit", Color.white);
+            var hitFx = FxPrefab("Fx_Hit", fxMat, 7, 7f, 0.22f, 0.35f);
+            var deathFx = FxPrefab("Fx_Death", fxMat, 26, 9f, 0.5f, 0.8f);
+
             // --- 종족별 프리팹과 종족 에셋
             float ms = cfg.memberScale;
             var raceAssets = new RaceDefinition[Races.Length];
@@ -89,9 +101,16 @@ namespace Babel.EditorTools
                 string path = $"{Root}/Data/Race_{sp.key}.asset";
                 bool fresh = AssetDatabase.LoadAssetAtPath<RaceDefinition>(path) == null;
                 var race = LoadOrCreate<RaceDefinition>(path);
-                race.commanderPrefab = UnitPrefab($"{sp.key}_Commander", cfg.commanderRadius, mat, dark, goldMat, sp.look, 0f, cfg.commanderHp, true);
-                race.leaderPrefab = UnitPrefab($"{sp.key}_Leader", cfg.squadLeaderRadius, mat, dark, null, sp.look, 9f, cfg.leaderHp, false);
-                race.memberPrefab = UnitPrefab($"{sp.key}_Member", cfg.squadLeaderRadius * ms, mat, dark, null, sp.look, 6f, cfg.memberHp, false);
+                Sprite sC = LoadSprite(sp.sprites[0]), sL = LoadSprite(sp.sprites[1]), sM = LoadSprite(sp.sprites[2]);
+                race.commanderPrefab = sC != null
+                    ? SpriteUnitPrefab($"{sp.key}_Commander", cfg.commanderRadius, sC, sp.flip, ringSprite, sp.color, goldMat, true, 0f, cfg.commanderHp)
+                    : UnitPrefab($"{sp.key}_Commander", cfg.commanderRadius, mat, dark, goldMat, sp.look, 0f, cfg.commanderHp, true);
+                race.leaderPrefab = sL != null
+                    ? SpriteUnitPrefab($"{sp.key}_Leader", cfg.squadLeaderRadius, sL, sp.flip, ringSprite, sp.color, null, false, 9f, cfg.leaderHp)
+                    : UnitPrefab($"{sp.key}_Leader", cfg.squadLeaderRadius, mat, dark, null, sp.look, 9f, cfg.leaderHp, false);
+                race.memberPrefab = sM != null
+                    ? SpriteUnitPrefab($"{sp.key}_Member", cfg.squadLeaderRadius * ms, sM, sp.flip, ringSprite, sp.color, null, false, 6f, cfg.memberHp)
+                    : UnitPrefab($"{sp.key}_Member", cfg.squadLeaderRadius * ms, mat, dark, null, sp.look, 6f, cfg.memberHp, false);
                 race.color = sp.color; // 색은 머티리얼과 항상 맞춘다
                 if (string.IsNullOrEmpty(race.description)) race.description = sp.description;
                 if (fresh)
@@ -139,6 +158,8 @@ namespace Babel.EditorTools
             world.boltPrefab = bolt;
             world.skillPrefab = skill;
             world.autoPrefab = auto;
+            world.hitFxPrefab = hitFx;
+            world.deathFxPrefab = deathFx;
             world.player = player;
             world.races = raceAssets;
             select.world = world;
@@ -262,6 +283,158 @@ namespace Babel.EditorTools
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{Root}/Prefabs/{name}.prefab");
             Object.DestroyImmediate(root);
             return prefab.GetComponent<Unit>();
+        }
+
+        // 일러스트 빌보드 유닛: 바닥 고리(종족 색) + 카메라를 향해 서 있는 스프라이트. 지휘관은 머리 위 금색 구.
+        static Unit SpriteUnitPrefab(string name, float radius, Sprite sprite, bool flip, Sprite ring, Color ringColor,
+            Material gold, bool commander, float lunge, float hp)
+        {
+            var cfg = AssetDatabase.LoadAssetAtPath<BattleConfig>($"{Root}/Data/BattleConfig.asset");
+            float r = cfg != null ? cfg.U(radius) : radius * 0.05f;
+            float h = r * (commander ? 7.4f : 6.2f);
+
+            var root = new GameObject(name);
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(root.transform, false);
+
+            var ringGo = new GameObject("Ring");
+            ringGo.transform.SetParent(visual.transform, false);
+            ringGo.transform.localPosition = new Vector3(0f, 0.06f, 0f);
+            ringGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            ringGo.transform.localScale = Vector3.one * (r * 3.3f);
+            var rr = ringGo.AddComponent<SpriteRenderer>();
+            rr.sprite = ring;
+            rr.color = new Color(ringColor.r, ringColor.g, ringColor.b, 0.9f);
+            rr.sortingOrder = -10;
+            rr.shadowCastingMode = ShadowCastingMode.Off;
+
+            var bb = new GameObject("Billboard");
+            bb.transform.SetParent(visual.transform, false);
+            var sg = new GameObject("Sprite");
+            sg.transform.SetParent(bb.transform, false);
+            sg.transform.localScale = new Vector3(h, h, 1f);
+            var sr = sg.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.sortingOrder = 0;
+            sr.shadowCastingMode = ShadowCastingMode.Off;
+
+            if (commander && gold != null)
+            {
+                var crown = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                crown.name = "Crown";
+                Object.DestroyImmediate(crown.GetComponent<Collider>());
+                crown.transform.SetParent(bb.transform, false);
+                crown.transform.localScale = Vector3.one * (r * 0.8f);
+                crown.transform.localPosition = new Vector3(0f, h + r * 0.5f, 0f);
+                crown.GetComponent<Renderer>().sharedMaterial = gold;
+            }
+
+            var unit = root.AddComponent<Unit>();
+            unit.radius = radius;
+            unit.maxHp = hp;
+            unit.hp = hp;
+            unit.lungeDistance = lunge;
+            unit.visual = visual.transform;
+            unit.sprite = sr;
+            unit.billboard = bb.transform;
+            unit.flipByFacing = flip;
+            unit.spriteFacesRight = true;
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{Root}/Prefabs/{name}.prefab");
+            Object.DestroyImmediate(root);
+            return prefab.GetComponent<Unit>();
+        }
+
+        static Sprite LoadSprite(string name) => AssetDatabase.LoadAssetAtPath<Sprite>($"{Root}/Textures/Characters/{name}.png");
+
+        static void ConfigureSprite(string path, float ppu)
+        {
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti == null) return;
+            var st = new TextureImporterSettings();
+            ti.ReadTextureSettings(st);
+            bool ok = ti.textureType == TextureImporterType.Sprite && Mathf.Approximately(ti.spritePixelsPerUnit, ppu)
+                && st.spriteAlignment == (int)SpriteAlignment.BottomCenter && ti.alphaIsTransparency;
+            if (ok) return;
+            ti.textureType = TextureImporterType.Sprite;
+            ti.spriteImportMode = SpriteImportMode.Single;
+            ti.spritePixelsPerUnit = ppu;
+            ti.alphaIsTransparency = true;
+            ti.mipmapEnabled = true;
+            ti.filterMode = FilterMode.Bilinear;
+            ti.ReadTextureSettings(st);
+            st.spriteAlignment = (int)SpriteAlignment.BottomCenter;
+            ti.SetTextureSettings(st);
+            ti.SaveAndReimport();
+        }
+
+        // 바닥 고리: 안쪽은 옅게 채우고 가장자리는 진하게. 종족 색으로 물들여 쓴다. 한 변 128px = 1 단위.
+        static Sprite RingSprite()
+        {
+            string path = $"{Root}/Textures/Ring.png";
+            if (!File.Exists(path))
+            {
+                const int n = 128;
+                var t = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(n / 2f, n / 2f)) / (n / 2f);
+                        float a = d > 1f ? 0f : d > 0.74f ? Mathf.Lerp(1f, 0f, Mathf.Clamp01((d - 0.94f) / 0.06f)) : 0.38f;
+                        t.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                    }
+                File.WriteAllBytes(path, t.EncodeToPNG());
+                Object.DestroyImmediate(t);
+                AssetDatabase.ImportAsset(path);
+            }
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti != null && (ti.textureType != TextureImporterType.Sprite || ti.spriteImportMode != SpriteImportMode.Single))
+            {
+                ti.textureType = TextureImporterType.Sprite;
+                ti.spriteImportMode = SpriteImportMode.Single;
+                ti.spritePixelsPerUnit = 128f;
+                ti.alphaIsTransparency = true;
+                ti.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        // 파티클 프리팹: 한 번 터지고 사라지는 불꽃. 색은 실행 중에 정한다.
+        static GameObject FxPrefab(string name, Material mat, int count, float speed, float size, float life)
+        {
+            var go = new GameObject(name);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.duration = life;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.6f, life);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.4f, speed);
+            main.startSize = new ParticleSystem.MinMaxCurve(size * 0.5f, size);
+            main.gravityModifier = 0.3f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var em = ps.emission;
+            em.rateOverTime = 0f;
+            em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)count) });
+            var sh = ps.shape;
+            sh.shapeType = ParticleSystemShapeType.Sphere;
+            sh.radius = 0.15f;
+            var col = ps.colorOverLifetime;
+            col.enabled = true;
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                      new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+            col.color = g;
+            var sz = ps.sizeOverLifetime;
+            sz.enabled = true;
+            sz.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.1f));
+            var rend = go.GetComponent<ParticleSystemRenderer>();
+            rend.sharedMaterial = mat;
+            rend.shadowCastingMode = ShadowCastingMode.Off;
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, $"{Root}/Prefabs/{name}.prefab");
+            Object.DestroyImmediate(go);
+            return prefab;
         }
 
         static GameObject ShotPrefab(BattleConfig cfg, string name, float radius, Material mat, Material lineMat, Color c)

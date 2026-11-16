@@ -173,6 +173,10 @@ MonoBehaviour:
   lungeDistance: 0
   visual: {fileID: 5149819978865700311}
   bodyRenderer: {fileID: 4095250854196585314}
+  sprite: {fileID: 0}
+  flipByFacing: 0
+  spriteFacesRight: 1
+  billboard: {fileID: 0}
   team: 0
   hp: 30
   dead: 0

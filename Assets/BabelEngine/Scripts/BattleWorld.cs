@@ -8,6 +8,7 @@ namespace Babel
     {
         public BattleConfig config;
         public GameObject boltPrefab, skillPrefab, autoPrefab;
+        [Tooltip("타격 불꽃 / 사망 폭발 (파티클 프리팹)")] public GameObject hitFxPrefab, deathFxPrefab;
         public PlayerController player;
         [Tooltip("종족 선택 화면에 나오는 종족들")] public RaceDefinition[] races;
         public BattleCamera battleCamera;
@@ -37,6 +38,10 @@ namespace Babel
         readonly List<Projectile> projectiles = new List<Projectile>();
         readonly Stack<GameObject>[] pool = { new Stack<GameObject>(), new Stack<GameObject>(), new Stack<GameObject>() };
         Transform projectileRoot;
+
+        class FxItem { public ParticleSystem ps; public float end; public int kind; }
+        readonly List<FxItem> fxActive = new List<FxItem>();
+        readonly Stack<ParticleSystem>[] fxPool = { new Stack<ParticleSystem>(), new Stack<ParticleSystem>() };
         readonly List<ArmySpawn> slots = new List<ArmySpawn>();
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -92,6 +97,7 @@ namespace Babel
             }
             if (playerArmy == null) { Debug.LogError("[Babel] 플레이어 ArmySpawn(playerControlled)이 없습니다."); enabled = false; return; }
             player.Init(this, playerArmy, battleCamera);
+            Unit.billboardRot = battleCamera.Cam.transform.rotation;
             foreach (Unit u in units) u.SyncView(s);
             started = true;
         }
@@ -113,9 +119,11 @@ namespace Babel
             TickDummies(dt);
             TickProjectiles(dt);
             UpdateOutcome();
+            TickFx();
             for (int i = texts.Count - 1; i >= 0; i--) { texts[i].t += dt; if (texts[i].t >= texts[i].dur) texts.RemoveAt(i); }
             for (int i = pings.Count - 1; i >= 0; i--) { pings[i].t += dt; if (pings[i].t >= pings[i].dur) pings.RemoveAt(i); }
             float s = config.unitScale;
+            Unit.billboardRot = battleCamera.Cam.transform.rotation;
             foreach (Unit u in units) { u.flash = Mathf.Max(0f, u.flash - dt * 6f); u.SyncView(s); }
         }
 
@@ -168,6 +176,9 @@ namespace Babel
             e.flash = 1f;
             if (e.squad != null) e.squad.hitAt = time;
             if (texts.Count >= 60) texts.RemoveAt(0);
+            Color fxColor = from != null ? from.race.color : Color.white;
+            SpawnFx(0, e.pos, fxColor);
+            if (e.hp <= 0f) SpawnFx(1, e.pos, e.army != null ? e.army.race.color : fxColor);
             Color color = from != null ? from.race.color : Color.white;
             texts.Add(new FloatText { pos = e.pos + new Vector2((Random.value - 0.5f) * 16f, 0f), text = "-" + dmg.ToString("0.#"), color = color, dur = 0.8f });
             if (e.hp <= 0f) e.dead = true;
@@ -227,6 +238,33 @@ namespace Babel
                 }
                 if (d.patrolAmp > 0f)
                     u.pos = d.basePos + d.patrolAxis * (Mathf.Sin(time * d.patrolSpeed + d.phase) * d.patrolAmp);
+            }
+        }
+
+        // ------------------------------------------------------------ 이펙트
+        // kind 0 = 타격 불꽃, 1 = 사망 폭발. 파티클을 풀에 돌려 쓴다.
+        void SpawnFx(int kind, Vector2 pos, Color c)
+        {
+            GameObject prefab = kind == 0 ? hitFxPrefab : deathFxPrefab;
+            if (prefab == null) return;
+            ParticleSystem ps = fxPool[kind].Count > 0 ? fxPool[kind].Pop() : Instantiate(prefab, projectileRoot).GetComponent<ParticleSystem>();
+            ps.transform.position = new Vector3(pos.x * config.unitScale, 1.4f, pos.y * config.unitScale);
+            var main = ps.main;
+            main.startColor = new ParticleSystem.MinMaxGradient(Color.Lerp(c, Color.white, 0.35f), c);
+            ps.gameObject.SetActive(true);
+            ps.Clear();
+            ps.Play();
+            fxActive.Add(new FxItem { ps = ps, end = time + (kind == 0 ? 0.6f : 1.2f), kind = kind });
+        }
+
+        void TickFx()
+        {
+            for (int i = fxActive.Count - 1; i >= 0; i--)
+            {
+                if (fxActive[i].end > time) continue;
+                fxActive[i].ps.gameObject.SetActive(false);
+                fxPool[fxActive[i].kind].Push(fxActive[i].ps);
+                fxActive.RemoveAt(i);
             }
         }
 
