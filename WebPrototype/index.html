@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바벨 엔진 — 분대·카메라 프로토타입</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="panel readout">
+  <div class="title">바벨 엔진 · 분대 / 카메라 R&amp;D</div>
+  <div class="row"><span>조작 모드</span><b id="r-mode" class="avatar">아바타</b></div>
+  <div class="row"><span>선택된 분대</span><b id="r-sel">—</b></div>
+  <div class="row"><span>거리 (빨강 → 선택 분대)</span><b id="r-dist">—</b></div>
+  <div class="row"><span>최대 거리 D</span><b id="r-d">1440 u</b></div>
+  <div class="row"><span>원거리 사거리 (D 기준)</span><b id="r-range">1440 u</b></div>
+  <div class="row"><span>선택 분대 상태</span><b id="r-state">—</b></div>
+  <div class="sep"></div>
+  <div class="row"><span>카메라 목표</span><b id="r-cam">빨강 분대</b></div>
+  <div class="row"><span>카메라 목표까지 지연</span><b id="r-lag">0.0 u</b></div>
+  <div class="row"><span>카메라 줌</span><b id="r-zoom">1.75×</b></div>
+  <div class="row"><span>커서 (월드 좌표)</span><b id="r-cursor">—</b></div>
+  <div class="sep"></div>
+  <div class="row"><span><kbd>휠</kbd> 카메라 줌 · <kbd>H</kbd> 도움말 · <kbd>U</kbd> UI 전체 숨기기</span></div>
+  <div class="row"><span><kbd>X</kbd> 전투 행동 금지 · <kbd>X</kbd><kbd>X</kbd> 해제</span></div>
+</div>
+
+<div class="right">
+<div class="panel tuning" id="tuning">
+  <div class="title">튜닝</div>
+  <label>최대 거리 D <output id="o-d">1440</output>
+    <input id="t-d" type="range" min="320" max="2560" step="20" value="1440"></label>
+  <label>원거리 사거리 (× 검은 원 지름) <output id="o-range">1.00×</output>
+    <input id="t-range" type="range" min="0.25" max="1.5" step="0.05" value="1"></label>
+  <label>분대원 평시 간격 <output id="o-spacing">3.0×</output>
+    <input id="t-spacing" type="range" min="1" max="5" step="0.5" value="3"></label>
+  <label>아바타 모드 줌 <output id="o-zoom-avatar">1.75×</output>
+    <input id="t-zoom-avatar" type="range" min="0.3" max="2" step="0.01" value="1.75"></label>
+  <label>분대 카메라 줌 (반지름 안) <output id="o-zoom-near">1.00×</output>
+    <input id="t-zoom-near" type="range" min="0.3" max="2" step="0.01" value="1"></label>
+  <label>분대 카메라 줌 (반지름 밖) <output id="o-zoom-far">0.60×</output>
+    <input id="t-zoom-far" type="range" min="0.3" max="2" step="0.01" value="0.6"></label>
+  <label>분대 카메라 포인트 (빨강→분대) <output id="o-bias">75%</output>
+    <input id="t-bias" type="range" min="0.5" max="1" step="0.05" value="0.75"></label>
+  <label>카메라 추적 속도 <output id="o-cam">5.0</output>
+    <input id="t-cam" type="range" min="1" max="20" step="0.5" value="5"></label>
+  <label>분대 가속·감속 (반응성) <output id="o-steer">3.0</output>
+    <input id="t-steer" type="range" min="1" max="16" step="0.5" value="3"></label>
+  <label>분대 최대 이동 속도 <output id="o-steermax">480</output>
+    <input id="t-steermax" type="range" min="100" max="1500" step="20" value="480"></label>
+  <label class="chk"><input type="checkbox" id="t-circles" checked> 미선택 분대 제한 원 표시</label>
+  <label class="chk"><input type="checkbox" id="t-mids" checked> 미선택 분대 카메라 포인트 표시</label>
+  <label class="chk"><input type="checkbox" id="t-ranges" checked> 미선택 분대 사거리 표시</label>
+  <button id="t-hit" type="button">분대 피격 테스트 (화살표 점멸)</button>
+  <button id="t-reset" type="button">위치 초기화</button>
+</div>
+
+<div class="cards" id="cards"></div>
+</div>
+
+<div class="panel help">
+  <div class="col" id="h-avatar">
+    <div class="h">아바타 모드</div>
+    <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 빨강 분대 이동</div>
+    <div><kbd>마우스</kbd> 빨강 분대 조준</div>
+    <div><kbd>좌클릭</kbd> 1발 발사</div>
+    <div><kbd>1</kbd>–<kbd>4</kbd> 파랑 분대 선택</div>
+    <div><kbd>우클릭</kbd> 모든 분대 집결 → 비전투 커서 추적 · 한 번 더: 전투 허용 · 더블 클릭: 중지</div>
+  </div>
+  <div class="col" id="h-cmd">
+    <div class="h">분대 지휘 모드</div>
+    <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 빨강 분대 계속 이동</div>
+    <div><kbd>우클릭</kbd> 분대가 비전투 커서 추적 · 한 번 더: 전투 허용 · 더블 클릭: 그 자리에 고정</div>
+    <div><kbd>좌클릭</kbd> 분대 스킬 1발 발사</div>
+    <div><kbd>1</kbd>–<kbd>4</kbd> 분대 전환 · 같은 숫자 한 번 더: 카메라 이동</div>
+    <div><kbd>Space</kbd> 아바타 선택 · 한 번 더: 카메라 복귀</div>
+    <div><kbd>Esc</kbd> 아바타 모드로 바로 복귀 (카메라 포함)</div>
+  </div>
+  <div class="auto">
+    <div class="h">파랑 분대 자동 전투</div>
+    <div>사거리 안의 적 → 자동 사격 · 자기 검은 원 안의 적 → 근접 돌격</div>
+    <div>근접 중 적이 검은 원 밖으로 → 아바타 쪽으로 퇴각 → 원래 위치로 복귀</div>
+    <div>분대원 4명(작은 원)은 분대장을 따라 함께 사격·근접 공격 · 빨강 분대원도 사거리 안 적을 자동 사격</div>
+    <div class="dim">우클릭 이동 명령은 자동 전투보다 우선합니다 (도착할 때까지 근접 돌격 안 함)</div>
+  </div>
+  <div class="legend">
+    <span><i class="sw range"></i>원거리 사거리</span>
+    <span><i class="sw green"></i>카메라 목표</span>
+    <span><i class="sw ring"></i>거리 제한 (지름 = D)</span>
+    <span><i class="sw cross">+</i>실제 카메라 중심</span>
+    <span><i class="sw dest"></i>지정 위치</span>
+  </div>
+</div>
+
+<div id="toast"></div>
+<button id="ui-toggle" type="button" title="U">UI 숨기기 (U)</button>
+
+<script src="game.js"></script>
+</body>
+</html>
